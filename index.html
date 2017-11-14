@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+  body{
+    background:#fafafa; 
+  }
+
+  .axis{
+    stroke: #ddd;
+    stroke-width: 1;
+  }
+
+  .arc text {
+    font: 10px Circular Std;
+    text-anchor: middle;
+  }
+
+  .line {
+    fill: none;
+    stroke-width: 2px;
+  }
+
+  button {
+    width: 4em;
+    height: 1.5em;
+    position: absolute;
+    top: 695px;
+    background: #bbb;
+    color: white;
+    font-size: 1em;
+    padding-top: 0;
+    margin-left: 5px;
+    left: 290px;
+  }
+
+  .tooltip{
+    position: absolute;
+    border-radius: 10px;
+    text-align: center;
+    background: #f1f1f1;
+    border: #fdfdfd solid 1px;
+    font-size: 12.5px;
+    vertical-align: middle;
+  }
+
+  #legend{
+    position:absolute;
+    left: 0px;
+    top: 310px;
+  }
+
+  .legend-icon{
+    position:absolute;
+    left: 0px;
+    top: 0px;
+    width: 10px;
+    height: 30px;
+    border-radius: 5px;
+    border: #eee solid 1px;
+  }
+
+  .legend{
+    position: absolute;
+    left: 5px;
+    top: 397px;
+    width: 780px;
+    border-radius: 5px;
+  }
+
+  .legend1, .legend2, .legend3, .legend4, .legend5, .legend6, .legend7, .legend8{
+    position:absolute;
+    left: 0px;
+    top: 0px;
+    width: 10px;
+    height: 30px;
+    border-radius: 5px;
+    border: #eee solid 1px;
+    display: none;
+  }
+
+.stack{
+  position: absolute;
+}
+
+</style>
+
+  <svg id="svg" width="1540" height="757"></svg>
+  <div class="tooltip"></div>
+  <div id="overlay2"></div>
+  <div id="legend">
+    <img class="legend" src = "legend-s.png" />
+  </div>
+
+<script src="https://code.jquery.com/jquery-1.12.4.js"></script>
+<script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+
+<script src="js/d3.v3.min.js"></script>
+<script src="js/d3.v4.min.js"></script>
+<script src="js/perlin.js"></script>
+
+<script>
+
+  // parameter to ensure the timeline animation plays and only plays once when being refreshed or launched
+  var isPlayed = false;
+
+  var svg = d3.selectAll("svg"),
+      width = +svg.attr("width"),
+      height = +svg.attr("height"),
+      g = svg.append("g").attr("transform", "translate(" + 65 + "," + 125 + ")");
+
+  var color_array = ["#E57373", "#FFD54F", "#AED581", "#4DB6AC", "#4FC3F7", "#1E88E5", "#9575CD", "#F06292"];
+
+  // define the global parameters/functions that are called by drawings & animations
+  var x = d3.scale.linear()
+      .range([15, 277]);
+
+  var y = d3.scale.linear()
+      .range([345,750]);
+
+  var DURATION = 60000;
+
+  var area_p = d3.svg.area()
+    .interpolate("basis")
+    .x(function(d) { return x(d.timestamp); })
+    .y0(function(d) { return y(d.y0); })
+    .y1(function(d) { return y(d.y0 + d.y); });
+
+  var pie = d3.pie()
+      .sort(null)
+      .value(function(d) {
+          return Math.sqrt(Math.sqrt(d.number));
+       });
+
+  var radius = 30;
+
+  var path = d3.arc()
+      .outerRadius(function(d){ 
+        var this_radius = 5+Math.round(radius/48*Math.sqrt(d.data.calories));
+        return this_radius;
+      })
+      .innerRadius(0);
+
+
+  // initialize the animation parameters
+  var tInit = performance.now();
+
+  var t = new Date().getTime();
+  var lt = t;
+  var elapsedTime = 0;
+  var elapsedTime2 = 0;
+
+  requestAnimationFrame(animate);
+
+  // define the animations per visual elements
+  function animate () {
+
+    t = new Date().getTime();
+    var dt = t - lt;
+    elapsedTime += dt / DURATION; 
+    elapsedTime2 += dt / DURATION *10;
+    lt = t;
+
+    // natural popping bubbles
+    // changing radius using perlin noise
+    area_p = d3.svg.area()
+    .interpolate("basis")
+    .x(function(d) { return x(d.timestamp); })
+    .y0(function(d,i) {return y(d.y0) 
+      + noise.simplex2 ( (60-i) +elapsedTime2 * 0.8, y(d.y0)+ elapsedTime2 * 0.5)
+      * Math.ceil(d.timestamp/8)*2.6;
+    })
+    .y1(function(d,i) { return y(d.y0 + d.y)
+      + noise.simplex2 ( (60-i) +elapsedTime2* 0.8, y(d.y0 + d.y)+ elapsedTime2 * 0.5) 
+      * Math.ceil(d.timestamp/8)*2.6+0.5;
+    });
+
+    // natural river wave
+    // changing boundary pixel per layer using perlin noise
+    path = d3.arc()
+      .outerRadius(function(d){
+        var this_radius = 5+Math.round(radius/48*Math.sqrt(d.data.calories));
+        if(d3.select(this).attr("id") == null)
+          this_radius = this_radius+noise.simplex2(this_radius, this_radius*(d.data.calories%3+1+elapsedTime))*3;
+        else
+          this_radius = this_radius+noise.simplex2(this_radius, this_radius*(d.data.calories%3+1+elapsedTime*2))*6;
+        return this_radius;
+      })
+      .innerRadius(0);
+
+    requestAnimationFrame(animate);
+
+    d3.selectAll(".layer")
+    .attr("d",function(d){
+        return area_p(d.values);
+    });
+
+    // draw the textures representing nutritional on the bubbles
+    // invisible when not being highlighted
+    d3.selectAll(".texture-1").attr("d", path);
+    d3.selectAll(".texture-2").attr("d", path);
+    d3.selectAll(".texture-3").attr("d", path);
+    d3.selectAll(".texture-4").attr("d", path);
+    d3.selectAll(".texture-5").attr("d", path);
+    d3.selectAll(".texture-6").attr("d", path);
+    d3.selectAll(".texture-7").attr("d", path);
+    d3.selectAll(".texture-8").attr("d", path);
+
+  }
+
+  // position X axis along with timeline (dates)
+  function cal_X(timestamp, day){
+    return 60*(day-1) -35;
+  }
+
+  // position Y axis along with time per day (breafast/lunch/dinner)
+  // tiny offset added to make the layout less dull
+  function cal_Y(mood, meal){
+    return meal*105 + mood*2 -182;
+  }
+
+  // Molecule View 
+  // the major function to draw the bubbles and the timeline layout
+  function drawEle(){
+
+    // draw the horizontal lines as X asis
+    for(var i=2; i<=4; i++){
+      g.append("line")
+        .attr("class","axis")
+        .attr("id","line"+i)
+        .attr("x1",-55)
+        .attr("x2",1420)
+        .attr("y1",function(){return 88*i+15*(i-2)-195;})
+        .attr("y2",function(){return 88*i+15*(i-2)-195;});
+    }
+
+    // load Lee's data
+    d3.csv("dataLee.csv", function(d) {
+      return d;
+    }, function(error, data) {
+      
+      var timestamp = 0;
+      var tx =0, ty =0;
+
+      var range = data.map(function(d){ d.value = +d["Calories"]; return d; });
+
+      // process per data entry
+      for (var i=1; i<=data.length; i++){
+
+        var data_temp = data[timestamp];
+
+        // re-put the data metrics into a new structure
+        var data_pie=[
+          {"mood":data_temp.mood,"calories":data_temp.Calories,"nutrition":"Carbs", "number":data_temp.Carbs, 
+            "keyword": data_temp.Keyword, "timestamp":timestamp, "mealidx":data_temp.meal, "dayidx":data_temp.day},
+          {"mood":data_temp.mood,"calories":data_temp.Calories,"nutrition":"Fat", "number":data_temp.Fat,
+            "keyword": data_temp.Keyword, "timestamp":timestamp, "mealidx":data_temp.meal, "dayidx":data_temp.day},
+          {"mood":data_temp.mood,"calories":data_temp.Calories,"nutrition":"Fiber", "number":data_temp.Fiber,
+            "keyword": data_temp.Keyword, "timestamp":timestamp, "mealidx":data_temp.meal, "dayidx":data_temp.day},
+          {"mood":data_temp.mood,"calories":data_temp.Calories,"nutrition":"Protein", "number":data_temp.Protein,
+            "keyword": data_temp.Keyword, "timestamp":timestamp, "mealidx":data_temp.meal, "dayidx":data_temp.day},
+          {"mood":data_temp.mood,"calories":data_temp.Calories,"nutrition":"Sodium", "number":data_temp.Sodium/1000,
+              "keyword": data_temp.Keyword, "timestamp":timestamp, "mealidx":data_temp.meal, "dayidx":data_temp.day}
+        ];
+
+        // calculate the coordinates based on date(X) & meal(Y) index
+        tx = cal_X(timestamp, data_temp.day);
+        ty = cal_Y(data_temp.mood, data_temp.meal);
+
+        if (error) throw error;
+
+        // draw the bubbles
+        var arc = g.selectAll(".arc")
+          .data(pie(data_pie))
+          .enter().append("g")
+            .attr("class", function(){return "arc"+timestamp;})
+            .attr("transform", "translate(" + tx + "," + ty + ")")
+            .on("mouseover", function(d){
+
+              // when hovering, call the functions to draw RoseViz
+              var transform = d3.select(this).attr("transform");
+
+              drawTag(d.data,transform,data.length);
+
+              var this_timestamp = this.className.baseVal.substring(3);
+
+              drawThisRing(data[this_timestamp],transform,data.length);
+
+              var stone = d3.transform(d3.select(this).attr("transform"));
+              stone = stone.translate[0];
+
+              // reposition the other bubbles by repelling => relayout to reduce visual clutter
+              for (var j=1; j<=data.length; j++){
+                // traverse all bubbles, no change on the hovered one
+                if(j==this_timestamp){
+                  d3.selectAll(".arc"+j)
+                      .transition()
+                      .duration(1000)
+                      .ease(d3.easePolyInOut)
+                      .attr("transform",function(d){
+                        var t = d3.transform(d3.select(this).attr("transform"));
+                        return "translate(" +t.translate[0]+","+t.translate[1]+")";});
+                }
+                else{
+                  // repel the bubbles to the left/right further left/right
+                  d3.selectAll(".arc"+j)
+                      .transition()
+                      .duration(1000)
+                      .ease(d3.easePolyInOut)
+                      .attr("transform",function(d){
+                        var t = d3.transform(d3.select(this).attr("transform"));
+                          if(j<this_timestamp)
+                            var newX = t.translate[0] - 3*j;
+                          else
+                            var newX = t.translate[0] + 3*(46-j);
+                          if(newX != undefined)
+                            return "translate(" +newX+","+t.translate[1]+")";
+                      });
+                }
+              }
+            });
+
+        // append the textures on bubbles if needed
+        arc.append("path")
+          .attr("class",function(d){return "texture-"+d.data.mood;})
+          .attr("d", path)
+          .attr("stroke", function(d) {
+              return color_array[d.data.mood-1]
+          })
+          .attr("fill", function(d) {
+              return color_array[d.data.mood-1]
+          });
+        timestamp ++;
+      }
+
+    });
+
+  } 
+
+  // draw the elements (tagcloud & photo) inside the RoseViz
+  function drawTag(data, transform, _length){
+
+      var keyword = data.keyword;
+      var length = keyword.split("-").length;
+
+      // if the previous rose not vanished yet (due to bug/delay etc.), remove it
+      d3.selectAll(".tags").remove();
+      d3.selectAll(".tagBg").remove();
+      d3.selectAll(".tagimg").remove();
+
+      // append the background of tagcloud area first
+      svg.append("g")
+        .append("circle")
+        .attr("class","tagBg")
+        .attr("cx",65)
+        .attr("cy",125)
+        .attr("transform", transform)
+        .attr("r", 1)
+        .attr("fill","#fcfcfc");
+
+      // make the background appear smoothly
+      d3.selectAll(".tagBg")
+        .transition()
+        .duration(700)
+        .ease(d3.easeCubicInOut)
+        .attr("r", 40);
+
+        d3.selectAll(".tagBg")
+        .on("click",function(){
+          // when the tagcloud area is clicked, overlay the image of meal over the tagcloud if image exists
+          $( ".tooltip" ).animate({
+                opacity: 0
+              }, 500, function() {
+              $( ".tooltip" ).text("");
+              $(".tooltip").css("left", "0px").css("top", "0px").css("opacity",0)
+              .css("height","0px").css("line-height","0px").css("width","0px");
+            });
+          $(".tooltip").delay(500).css("left", "0px").css("top", "0px").css("opacity",0)
+              .css("height","0px").css("line-height","0px").css("width","0px").text("");
+              
+          var time = data.timestamp+1;
+
+          var status  = imageExists("lee-tag/"+time+".png");
+
+          // if image doesn't exist, simply no response and do not move forward to draw it
+          if(!status)
+            return;
+
+          // if image exists, draw it out
+          svg.append("g")
+            .append("svg:image")
+            .attr('x',25)
+            .attr('y',85)
+            .attr("transform", transform)
+            .attr('width', 80)
+            .attr('height', 80)
+            .attr("class", "tagimg")
+            .attr("xlink:href","lee-tag/"+time+".png")
+            .style("opacity",0)
+            .on("click",function(){
+              // when the image get clicked, first pop it up then smoothly disappear
+              d3.selectAll(".tagimg")
+              .transition()
+              .duration(600)
+              .attr('width', 120)
+              .attr('height', 120)
+              .attr('x',5)
+              .attr('y',65)
+              .transition()
+              .delay(600)
+              .duration(800)
+              .attr('width', 80)
+              .attr('height', 80)
+              .attr('x',25)
+              .attr('y',85);
+
+              d3.selectAll(".tagimg")
+              .transition()
+              .delay(2000)
+              .duration(1000)
+              .ease(d3.easeCubicInOut)
+              .style("opacity",0);
+              d3.selectAll(".tagimg").transition().delay(7000).remove();
+
+            })
+            .transition()
+            .duration(700)
+            .ease(d3.easeCubicInOut)
+            .style("opacity",1);
+        });
+
+      
+      // draw the tagcloud
+      // layout & set fonts according to #tags    
+      var fonts = 14;
+      for(var i = 0; i<length; i++){
+        svg.append("g").append("text").attr("class","tags")
+        .attr("x",function(){
+          if(length<2)
+            return 43;
+          else 
+            return 38 + Math.pow(-1,i%2)*3;
+
+        })
+        .attr("y",function(){
+          if(length<2)
+            return 125;
+          else if(length<3)
+            return 120+i*15+Math.floor(i/2)*2;
+          else if(length<4)
+            return 115+i*15+Math.floor(i/2)*2;
+          else if(length<5)
+            return 110+i*13+Math.floor(i/2)*2;
+          else
+            return 110+i*6+Math.floor(i/2)*3;
+
+        })
+        .attr("transform", transform)
+        .style("font-size","0.5px")
+        .style("opacity",0)
+        .attr("fill",function(){return color_array[data.mood-1];})
+        .text(function(){return keyword.split("-")[i]});
+
+        d3.selectAll(".tags")
+        .transition()
+        .delay(200)
+        .duration(800)
+        .ease(d3.easeCubicInOut)
+        .style("font-size",function(){return fonts+"px";}).style("opacity",1);
+      }
+  }
+
+
+  // RoseViz View 
+  // the major function to draw the rose
+  function drawThisRing(data_temp,transform,length){
+
+    // if the previous rose not vanished yet (due to bug/delay etc.), remove it
+    d3.selectAll(".ring_temp").remove();
+
+    var Total = data_temp.Calories;
+    var data_pie=[
+      {"mood":data_temp.mood,"nutrition":"Carbs", "number":data_temp.Carbs,"dayidx":data_temp.day,
+        "percentage":(data_temp.Carbs/Total*100).toFixed(0) + '%'},
+      {"mood":data_temp.mood,"nutrition":"Fat", "number":data_temp.Fat,"dayidx":data_temp.day,
+        "percentage":(data_temp.Fat/Total*100).toFixed(0) + '%'},
+      {"mood":data_temp.mood,"nutrition":"Fiber", "number":data_temp.Fiber,"dayidx":data_temp.day,
+        "percentage":(data_temp.Fiber/Total*100).toFixed(0) + '%'},
+      {"mood":data_temp.mood,"nutrition":"Protein", "number":data_temp.Protein,"dayidx":data_temp.day,
+        "percentage":(data_temp.Protein/Total*100).toFixed(0) + '%'},
+      {"mood":data_temp.mood,"nutrition":"Sodium", "number":data_temp.Sodium/1000,"dayidx":data_temp.day,
+        "percentage":(data_temp.Sodium/Total/10).toFixed(0) + '%'}
+    ];
+
+    var path_ring = d3.arc()
+        .outerRadius(2)
+        .innerRadius(1);
+
+    var ringThis = g.selectAll(".ring_temp")
+      .data(pie(data_pie))
+        .enter().append("g")
+          .attr("class", "ring_temp")
+          .attr("transform", transform);
+    
+    // draw the textures of components using tiled self-designed glyphs
+    ringThis.append("path")
+        .attr("class","ringpath")
+        .attr("d", path_ring)
+        .attr("stroke","#fafafa")
+        .attr("stroke-width", 0.5)
+        .attr("stroke-opacity", 0)
+        .attr("fill", function(d) {
+        var glyph_s; 
+        var scaler=140;
+
+          console.log(d.data);
+
+          // call different glyph according to the component
+          switch(d.data.nutrition){
+
+            case 'Carbs':
+              glyph_s = Math.sqrt(d.data.number/Total)*scaler;
+              svg.append("defs").append("pattern").attr("id","carb"+data_temp.mood)
+                .attr("patternUnits","userSpaceOnUse").attr("width",glyph_s).attr("height",glyph_s)
+                .append("image").attr("xlink:href","texture/carb"+data_temp.mood+".png")
+                .attr("width",glyph_s).attr("height",glyph_s);
+              return "url(#carb" + data_temp.mood + ")";
+              break;
+
+            case 'Fat':
+              glyph_s = Math.sqrt(d.data.number/Total)*scaler;
+              svg.append("defs").append("pattern").attr("id","fat"+data_temp.mood)
+                .attr("patternUnits","userSpaceOnUse").attr("width",glyph_s).attr("height",glyph_s)
+                .append("image").attr("xlink:href","texture/fat"+data_temp.mood+".png")
+                .attr("width",glyph_s).attr("height",glyph_s);
+              return "url(#fat" + data_temp.mood + ")";
+              break;
+
+            case 'Fiber':
+              glyph_s = Math.sqrt(d.data.number/Total)*scaler;
+              svg.append("defs").append("pattern").attr("id","fiber"+data_temp.mood)
+                .attr("patternUnits","userSpaceOnUse").attr("width",glyph_s).attr("height",glyph_s)
+                .append("image").attr("xlink:href","texture/fiber"+data_temp.mood+".png")
+                .attr("width",glyph_s).attr("height",glyph_s);
+              return "url(#fiber" + data_temp.mood + ")";
+              break;
+
+            case 'Protein':
+              glyph_s = Math.sqrt(d.data.number/Total)*scaler;
+              svg.append("defs").append("pattern").attr("id","protein"+data_temp.mood)
+                .attr("patternUnits","userSpaceOnUse").attr("width",glyph_s).attr("height",glyph_s)
+                .append("image").attr("xlink:href","texture/protein"+data_temp.mood+".png")
+                .attr("width",glyph_s).attr("height",glyph_s);
+              return "url(#protein" + data_temp.mood + ")";
+              break;
+
+            case 'Sodium':
+              glyph_s = Math.sqrt(d.data.number/Total)*scaler;
+              svg.append("defs").append("pattern").attr("id","sodium"+data_temp.mood)
+                .attr("patternUnits","userSpaceOnUse").attr("width",glyph_s).attr("height",glyph_s)
+                .append("image").attr("xlink:href","texture/sodium"+data_temp.mood+".png")
+                .attr("width",glyph_s).attr("height",glyph_s);
+              return "url(#sodium" + data_temp.mood + ")";
+              break;
+          }
+        })
+        .on("mouseover", function(d){
+
+          // call the text legend to title the hovered component area
+          var offsetX = 0;
+          var offsetY = 0;
+          if(d3.event.pageX - transform.split("(")[1].split(",")[0]<=90) offsetX = -110;
+            else offsetX = 25;
+          if(d3.event.pageY - transform.split(")")[0].split(",")[1]<=90) offsetY = -35;
+            else offsetY = 10;
+
+          if(ringThis.selectAll("path").attr("stroke-opacity")>0.9){
+            $(".tooltip").css("left", (d3.event.pageX+offsetX) + "px").css("top", (d3.event.pageY+offsetY)+"px")
+            .css("height","25px").css("line-height","25px").css("width","85px").css("opacity",0);
+            $( ".tooltip" ).text(d.data.nutrition + ": " +d.data.percentage)
+            $( ".tooltip" ).animate({
+                opacity: 1
+              }, 500, function() {
+                $(".tooltip").css("opacity",1);
+            });
+          }
+        })
+        .on("mouseout", function(d){
+
+          // detect if mouse totally leaves the rose area
+          // Y -> vanish the rose (remove all elements)
+          //      and relayout other bubbles to their original positions
+
+          var ra = Math.pow(Math.abs(d3.mouse(this)[0]),2);
+          var rb = Math.pow(Math.abs(d3.mouse(this)[1]),2);
+          var rc = Math.sqrt(ra+rb);
+          if(rc>=Math.sqrt(d.data.number/Total)*120){
+            $( ".tooltip" ).animate({
+                opacity: 0
+              }, 500, function() {
+              $( ".tooltip" ).text("");
+              $(".tooltip").css("left", "0px").css("top", "0px").css("opacity",0)
+              .css("height","0px").css("line-height","0px").css("width","0px");
+            });
+            $(".tooltip").delay(500).css("left", "0px").css("top", "0px").css("opacity",0)
+              .css("height","0px").css("line-height","0px").css("width","0px").text("");
+
+            path_ring = d3.arc()
+            .outerRadius(0)
+            .innerRadius(0);
+
+            ringThis.selectAll("path")
+            .transition().delay(200)
+            .duration(800)
+            .ease(d3.easeCubicInOut)
+            .attr("d", path_ring)
+            .attr("stroke-opacity", function(){
+              return 0;});
+            d3.selectAll(".ring_temp").transition().delay(1300).remove();
+
+
+            d3.selectAll(".tagimg")
+              .transition()
+              .duration(400)
+              .ease(d3.easeCubicOut)
+              .style("opacity",0);
+            d3.selectAll(".tagimg").transition().delay(700).remove();
+
+            d3.selectAll(".tags")
+            .transition()
+            .duration(500)
+            .ease(d3.easeCubicInOut)
+            .style("font-size","0.5px").style("opacity",0);
+            d3.selectAll(".tags").transition().delay(700).remove();
+
+            d3.selectAll(".tagBg")
+              .transition()
+              .delay(100)
+              .duration(300)
+              .ease(d3.easeCubicInOut)
+              .attr("r", 0).style("opacity",0);
+            d3.selectAll(".tagBg").transition().delay(900).remove();
+
+            for (var j=0; j<length; j++){
+              d3.selectAll(".arc"+j)
+                  .transition()
+                  .duration(1000)
+                  .ease(d3.easePolyInOut)
+                  .attr("transform",function(d){
+                    var t = d3.transform(d3.select(this).attr("transform"));
+                    // var newx = (width-560)/48 * j + 22*(d.data.dayidx-1) -35
+                    var newx = 60*(d.data.dayidx-1) -35;
+                    return "translate(" +newx+","+t.translate[1]+")";
+                  });
+            }
+          }
+        });
+
+
+    // calculate the radius per petal
+    path_ring = d3.arc()
+        .outerRadius(function (d) { 
+          if(Total<400)
+            return (Math.sqrt(d.data.number*3/Total)*80) + 41; 
+          else 
+            return (Math.sqrt(d.data.number*3/Total)*100) + 41; 
+          })
+        .innerRadius(40);
+
+    ringThis.selectAll("path")
+        .transition()
+        .duration(700)
+        .ease(d3.easeCubicInOut)
+        .attr("d", path_ring)
+        .attr("stroke-opacity", 1);
+  }
+
+
+  // the StreamGraph / River View 
+  // the major function to draw the Streamgraph and relevant interactions
+  function chart(csvpath) {
+
+//    var strokecolor = color_array[0];
+
+    // transform the original data to stacks
+    var stack = d3.layout.stack()
+        .offset("silhouette")
+        .values(function(d) { return d.values; })
+        .x(function(d) { return d.timestamp; })
+        .y(function(d) { return d.value; });
+
+    // transform the stacks to layer parameters (e.g. y0, y1,...)
+    var nest = d3.nest()
+        .key(function(d) { return d.mood; });
+
+    // define the area by transporting parameters
+    var area = d3.svg.area()
+        // .interpolate("cardinal")
+        .interpolate("basis")
+        .x(function(d) { return x(d.timestamp); })
+        .y0(function(d) { return y(d.y0); })
+        .y1(function(d) { return y(d.y0 + d.y); });
+
+
+    // function to load data and draw the Streamgraph
+    var graph = d3.csv(csvpath, function(data) {
+      data.forEach(function(d) {
+        d.timestamp = d.timestamp;
+          d.value = +d.Calories;
+      });
+
+      var layers = stack(nest.entries(data));
+
+      x.domain(d3.extent(data, function(d) { return d.timestamp; }));
+      y.domain([0, d3.max(data, function(d) { return d.y0 + d.y; })]);    
+
+      svg.selectAll(".layer")
+          .data(layers)
+        .enter().append("path")
+          .attr("class", "layer")
+          .attr("d", function(d) { return area(d.values); })
+          .style("fill", function(d) {return color_array[d.key-1]; })
+          .on("mouseover",function(d){
+            // draw the Stacked Rose Map with the selected mood category highlighted
+            drawStack(d.key);
+
+          // if previous rose did not vanished yet, remove it
+          // possible if the river is too close to the rose (distance < radius area)
+            d3.selectAll(".ring_temp").remove();
+            d3.selectAll(".tags").remove();
+            d3.selectAll(".tagimg").remove();
+            d3.selectAll(".tagBg").remove();
+
+            $( ".tooltip" ).animate({
+                  opacity: 0
+                }, 500, function() {
+                $( ".tooltip" ).text("");
+                $(".tooltip").css("left", "0px").css("top", "0px").css("opacity",0)
+                .css("height","0px").css("line-height","0px").css("width","0px");
+              });
+            $(".tooltip").delay(500).css("left", "0px").css("top", "0px").css("opacity",0)
+                .css("height","0px").css("line-height","0px").css("width","0px").text("");
+
+            // highlight the selected layer by appending stroke and changing opacity
+            d3.select(this)
+            .transition()
+            .duration(300)
+            .attr("stroke","#fff")
+            .attr("stroke-width","3px");
+
+            d3.selectAll(".layer")
+            .transition()
+            .duration(300)
+            .attr("opacity",0.8);
+
+            d3.select(this)
+            .transition()
+            .duration(300)
+            .attr("opacity",1);
+
+
+            for (var j=0; j<length; j++){
+              d3.selectAll(".arc"+j)
+                  .transition()
+                  .duration(1000)
+                  .ease(d3.easePolyInOut)
+                  .attr("transform",function(d){
+                    var t = d3.transform(d3.select(this).attr("transform"));
+                    var newx = 60*(d.data.dayidx-1) -35;
+                    return "translate(" +newx+","+t.translate[1]+")";
+                  });
+            }
+
+            // highlight all the bubbles of the selected mood category
+            // call their textures to appear
+            d3.selectAll(".texture-"+d.key)
+            .transition()
+            .duration(300)
+            .attr("id","selected")
+            .attr("stroke","#333")
+            .attr("fill", function(d) {
+            
+            // define the textures
+            var scaler = 19;
+            var t1 = svg.append("defs").append("pattern").attr("id","fiber")
+                  .attr("patternUnits","userSpaceOnUse").attr("width",scaler).attr("height",scaler)
+                  .append("image").attr("xlink:href","texture/fiber"+d.data.mood+".png")
+                  .attr("width",scaler).attr("height",scaler);//.style("opacity", 0.95);
+            var t2 = svg.append("defs").append("pattern").attr("id","sodium")
+                  .attr("patternUnits","userSpaceOnUse").attr("width",scaler).attr("height",scaler)
+                  .append("image").attr("xlink:href","texture/sodium"+d.data.mood+".png")
+                  .attr("width",scaler).attr("height",scaler);//.style("opacity", 0.95);
+            var t3 = svg.append("defs").append("pattern").attr("id","protein")
+                  .attr("patternUnits","userSpaceOnUse").attr("width",scaler).attr("height",scaler)
+                  .append("image").attr("xlink:href","texture/protein"+d.data.mood+".png")
+                  .attr("width",scaler).attr("height",scaler);//.style("opacity", 0.95);
+            var t4 = svg.append("defs").append("pattern").attr("id","carb")
+                  .attr("patternUnits","userSpaceOnUse").attr("width",scaler).attr("height",scaler)
+                  .append("image").attr("xlink:href","texture/carb"+d.data.mood+".png")
+                  .attr("width",scaler).attr("height",scaler);//.style("opacity", 0.95);
+            var t5 = svg.append("defs").append("pattern").attr("id","fat")
+                  .attr("patternUnits","userSpaceOnUse").attr("width",scaler).attr("height",scaler)
+                  .append("image").attr("xlink:href","texture/fat"+d.data.mood+".png")
+                  .attr("width",scaler).attr("height",scaler);//.style("opacity", 0.95);
+
+            switch(d.data.nutrition){
+
+              case 'Carbs':
+                return "url(#carb)";
+                break;
+
+              case 'Fat':
+                return "url(#fat)";
+                break;
+
+              case 'Fiber':
+                return "url(#fiber)";
+                break;
+
+              case 'Protein':
+                return "url(#protein)";
+                break;
+
+              case 'Sodium':
+                return "url(#sodium)";
+                break;
+            }
+            });
+          })
+          .on("mouseout",function(d){
+            // let the Stacked Rose disappear
+            d3.selectAll(".stack"+d.key)
+              .transition()
+              .delay(300)
+              .duration(500)
+              .style("opacity",0);
+
+            setTimeout(function(){
+              d3.selectAll(".stack"+d.key).remove()
+            },800);
+
+            // remove the highlight effects
+            d3.select(this)
+            .transition()
+            .duration(300)
+            .attr("stroke","none");
+
+            d3.selectAll(".layer")
+            .transition()
+            .duration(300)
+            .attr("opacity",1);
+
+            d3.selectAll("#selected")
+            .transition()
+            .duration(300)
+            .attr("id",null)
+            .attr("stroke",function(d) {
+                return color_array[d.data.mood-1];
+            })
+            .attr("fill", function(d) {
+                return color_array[d.data.mood-1];
+            });
+          });
+
+      svg.selectAll(".layer")
+        .transition()
+        .duration(300)
+        .attr("opacity", 1);
+    });
+  }
+
+
+  // Stacked Rose Diagram
+  function drawStack(key){
+    svg.append("g")
+      .append("svg:image")
+      .attr("x",10)
+      .attr("y",345)
+      .attr("width","340px")
+      .attr("class","stack"+key)
+      .attr("xlink:href","stack"+key+".png")
+      .style("opacity",0)
+      .transition()
+      .duration(800)
+      .style("opacity",1);
+  }
+
+
+  // major flow of functions
+  chart("dataLee_sum.csv");
+  drawEle();
+  if(!isPlayed)
+    setTimeout(function(){
+      loadplay()
+    },10);
+
+
+  // timeline animations
+  function loadplay()
+  {
+    d3.select("svg").append("g")
+        .append("rect")
+        .attr("id","bigoverlay")
+        .attr("x", 0)
+        .attr("y", 0)
+        .attr("width", width)
+        .attr("height", height)
+        .style("opacity","0");
+
+    var timer;
+    var duration = 180,
+        maxstep = 46,
+        minstep = 0;
+
+    // fade in the river by animating a rect overlay
+    d3.select("svg").append("g")
+        .append("rect")
+        .attr("id","overlay")
+        .attr("x", function(){return 5;})
+        .attr("y", 325)
+        .attr("width", function(){return 1490;})
+        .attr("height", 435)
+        .attr("fill", "#fafafa")
+        .style("opacity",0)
+        .transition()
+        .duration(500)
+        .style("opacity",1)
+        .transition()
+        .delay(200)
+        .duration(8100)
+        .ease(d3.easeLinear) 
+        .attr("x", 1490)
+        .attr("width", 10);
+
+    // gradually make the bubbles visible along their date indexes
+    for(var i = minstep; i<=46; i++){
+      d3.selectAll(".arc"+i)
+      .transition()
+      .duration(500)
+      .style("opacity",0);
+    }
+
+    setTimeout(function(){
+      var sliderValue = minstep;
+      timer = setInterval( function(){
+      if(sliderValue<maxstep){
+          // console.log(sliderValue);
+          sliderValue++;
+          update(sliderValue);
+        }
+        else {
+          d3.selectAll("#bigoverlay").remove();
+          isPlayed = true;
+        }
+      }, duration);
+      isPlayed = true
+    },500);
+  }
+
+  function update(timestamp) {
+    for(var i=0; i<=timestamp; i++)
+      d3.selectAll(".arc"+i)
+        .transition()
+        .duration(150)
+        .style("opacity",1);
+
+    d3.selectAll(".arc"+timestamp)
+      .transition()
+      .duration(150)
+      .style("opacity",1);    
+  }
+
+
+  function hideThisLegend(mood)
+  {
+    for(var i =1; i<9; i++)
+      if(i!=mood)
+        $(".legend"+i).css("display","none").css("top","0px").css("left","0px");
+
+  }
+
+  // the function to test if image exist
+  // return error 404 if not
+  function imageExists(image_url){
+
+      var http = new XMLHttpRequest();
+
+      http.open('HEAD', image_url, false);
+      http.send();
+
+      return http.status != 404;
+  }
+
+</script>
