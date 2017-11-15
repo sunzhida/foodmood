@@ -2,4 +2,4 @@
 
 > This Project is done by HKUST & EPFL.
 
-This demo is modified from the project of Yu Meng (@renie26).
+This demo is modified from the project of Yumeng (@renie26).
