@@ -704,7 +704,7 @@
     // function to load data and draw the Streamgraph
     var graph = d3.csv(csvpath, function(data) {
       data.forEach(function(d) {
-        d.timestamp = d.timestamp;
+//        d.timestamp = d.timestamp;
           d.value = +d.Calories;
       });
 
@@ -745,7 +745,7 @@
             .transition()
             .duration(300)
             .attr("stroke","#fff")
-            .attr("stroke-width","3px");
+            .attr("stroke-width","2px");
 
             d3.selectAll(".layer")
             .transition()
@@ -781,23 +781,23 @@
             
             // define the textures
             var scaler = 19;
-            var t1 = svg.append("defs").append("pattern").attr("id","fiber")
+            svg.append("defs").append("pattern").attr("id","fiber"+d.data.mood)
                   .attr("patternUnits","userSpaceOnUse").attr("width",scaler).attr("height",scaler)
                   .append("image").attr("xlink:href","texture/fiber"+d.data.mood+".png")
                   .attr("width",scaler).attr("height",scaler);//.style("opacity", 0.95);
-            var t2 = svg.append("defs").append("pattern").attr("id","sodium")
+            svg.append("defs").append("pattern").attr("id","sodium"+d.data.mood)
                   .attr("patternUnits","userSpaceOnUse").attr("width",scaler).attr("height",scaler)
                   .append("image").attr("xlink:href","texture/sodium"+d.data.mood+".png")
                   .attr("width",scaler).attr("height",scaler);//.style("opacity", 0.95);
-            var t3 = svg.append("defs").append("pattern").attr("id","protein")
+            svg.append("defs").append("pattern").attr("id","protein"+d.data.mood)
                   .attr("patternUnits","userSpaceOnUse").attr("width",scaler).attr("height",scaler)
                   .append("image").attr("xlink:href","texture/protein"+d.data.mood+".png")
                   .attr("width",scaler).attr("height",scaler);//.style("opacity", 0.95);
-            var t4 = svg.append("defs").append("pattern").attr("id","carb")
+            svg.append("defs").append("pattern").attr("id","carb"+d.data.mood)
                   .attr("patternUnits","userSpaceOnUse").attr("width",scaler).attr("height",scaler)
                   .append("image").attr("xlink:href","texture/carb"+d.data.mood+".png")
                   .attr("width",scaler).attr("height",scaler);//.style("opacity", 0.95);
-            var t5 = svg.append("defs").append("pattern").attr("id","fat")
+            svg.append("defs").append("pattern").attr("id","fat"+d.data.mood)
                   .attr("patternUnits","userSpaceOnUse").attr("width",scaler).attr("height",scaler)
                   .append("image").attr("xlink:href","texture/fat"+d.data.mood+".png")
                   .attr("width",scaler).attr("height",scaler);//.style("opacity", 0.95);
@@ -805,23 +805,23 @@
             switch(d.data.nutrition){
 
               case 'Carbs':
-                return "url(#carb)";
+                return "url(#carb" + d.data.mood + ")";
                 break;
 
               case 'Fat':
-                return "url(#fat)";
+                return "url(#fat" + d.data.mood + ")";
                 break;
 
               case 'Fiber':
-                return "url(#fiber)";
+                return "url(#fiber" + d.data.mood + ")";
                 break;
 
               case 'Protein':
-                return "url(#protein)";
+                return "url(#protein" + d.data.mood + ")";
                 break;
 
               case 'Sodium':
-                return "url(#sodium)";
+                return "url(#sodium" + d.data.mood + ")";
                 break;
             }
             });
